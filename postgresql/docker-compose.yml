@@ -1,5 +1,3 @@
-version: '3.7'
-
 services:
   postgres:
     container_name: postgres
@@ -13,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
 
   pgadmin4:
     container_name: pgadmin4
@@ -26,4 +24,10 @@ services:
     ports:
       - "8999:80"
     volumes:
-      - ./pgadmin:/var/lib/pgadmin
+      - pgadmin-data:/var/lib/pgadmin
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+volumes:
+  postgres-data:
+  pgadmin-data:
