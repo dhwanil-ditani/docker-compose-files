@@ -1,0 +1,47 @@
+name: workspace
+
+services:
+  postgres:
+    image: postgres:latest
+    restart: unless-stopped
+    ports:
+      - 5432:5432
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - ./postgres-initdb.d:/docker-entrypoint-initdb.d
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    
+  linkding:
+    build:
+      context: linkding/
+      dockerfile: docker/default.Dockerfile
+      target: linkding
+    restart: unless-stopped
+    ports:
+      - "${LD_HOST_PORT:-9090}:9090"
+    volumes:
+      - ld_data:/etc/linkding/data
+    env_file:
+      - linkding.env
+    depends_on:
+      - postgres
+  
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+    volumes:
+      - jellyfin_config:/config
+      - jellyfin_cache:/cache
+      - "/media/SSD/Shows:/Shows"
+      - "/media/SSD/Movies:/Movies"
+      - "/home/dhwanil/.local/share/TelegramDesktop/tdata/temp_data#2:/private"
+      - "/media/SSD/Udemy:/Udemy"
+
+volumes:
+  pg_data:
+  ld_data:
+  jellyfin_config:
+  jellyfin_cache:
