@@ -2,7 +2,7 @@ name: workspace
 
 services:
   postgres:
-    image: postgres:latest
+    image: postgres:18
     restart: unless-stopped
     ports:
       - 5432:5432
@@ -37,8 +37,9 @@ services:
       - jellyfin_cache:/cache
       - "/media/SSD/Shows:/Shows"
       - "/media/SSD/Movies:/Movies"
-      - "/home/dhwanil/.local/share/TelegramDesktop/tdata/temp_data#2:/private"
       - "/media/SSD/Udemy:/Udemy"
+      - "/media/SSD/.private:/Private"
+      - "/media/SSD/.jav-private:/JAV"
 
 volumes:
   pg_data:
