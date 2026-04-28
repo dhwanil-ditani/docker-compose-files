@@ -1,0 +1,14 @@
+# Secrets
+.env
+
+# Application data directories
+postgres/data/
+nextcloud/html/
+jellyfin/config/
+jellyfin/tvshows/
+jellyfin/movies/
+linkding/data/
+qbittorrent/config/
+qbittorrent/downloads/
+gluetun/
+tailscale/
