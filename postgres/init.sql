@@ -1,2 +1,0 @@
-CREATE DATABASE nextcloud;
-CREATE DATABASE linkding;
