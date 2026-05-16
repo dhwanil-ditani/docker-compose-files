@@ -62,10 +62,59 @@ services:
       - TZ=Asia/Kolkata
     volumes:
       - firefox_config:/config
+      - /mnt/SSD:/config/SSD
     ports:
       - "3001:3000"
       - "3002:3001"
     shm_size: "1gb"
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Kolkata
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - qbittorrent_config:/config
+      - /mnt/SSD/Downloads:/downloads
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    restart: unless-stopped
+  
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:v0.9.4
+    container_name: openwebui
+    environment:
+      - TZ=Asia/Kolkata
+      # General WebUI Configurations
+      - WEBUI_ADMIN_EMAIL=admin@example.com
+      - WEBUI_ADMIN_PASSWORD=admin@password
+      # --- Chat Model Configuration ---
+      - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
+      - OPENAI_API_KEY=${OPENROUTER_API_KEY}
+      - ENABLE_OLLAMA_API=False
+      # --- RAG / Document Embedding Configuration ---
+      - RAG_EMBEDDING_ENGINE=openai
+      - RAG_OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
+      - RAG_OPENAI_API_KEY=${OPENROUTER_API_KEY}
+      - RAG_EMBEDDING_MODEL=perplexity/pplx-embed-v1-0.6b
+      - RAG_EMBEDDING_CONCURRENT_REQUESTS=2
+      # Web Search Configurations
+      - ENABLE_WEB_SEARCH=True
+      - WEB_SEARCH_ENGINE=duckduckgo
+      - DDGS_BACKEND=auto
+      - WEB_SEARCH_CONCURRENT_REQUESTS=1
+      - WEB_LOADER_CONCURRENT_REQUESTS=3
+    volumes:
+      - openwebui_data:/app/backend/data
+    ports:
+      - "8081:8080"
     restart: unless-stopped
 
 volumes:
@@ -74,3 +123,5 @@ volumes:
   tailscale_data:
   postgres_data:
   firefox_config:
+  qbittorrent_config:
+  openwebui_data:
