@@ -1,0 +1,109 @@
+name: workspace
+
+services:
+  jellyfin:
+    image: jellyfin/jellyfin:latest
+    container_name: jellyfin
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Kolkata
+    volumes:
+      - jellyfin_config:/config
+      - jellyfin_cache:/cache
+      - /mnt/Storage/Shows:/Shows:ro,z
+      - /mnt/Storage/Movies:/Movies:ro,z
+      - /mnt/Storage/.private:/Private:ro,z
+    devices:
+      - /dev/dri:/dev/dri
+    restart: unless-stopped
+    ports:
+      - "8096:8096"
+
+  postgres:
+    image: postgres:18-alpine
+    container_name: postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - TZ=Asia/Kolkata
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  firefox:
+    image: lscr.io/linuxserver/firefox:latest
+    container_name: firefox
+    security_opt:
+      - seccomp=unconfined
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Kolkata
+    volumes:
+      - firefox_config:/config
+      - /mnt/Storage:/config/Storage:z
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    shm_size: "2gb"
+    restart: unless-stopped
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=Asia/Kolkata
+      - WEBUI_PORT=8080
+      - TORRENTING_PORT=6881
+    volumes:
+      - qbittorrent_config:/config
+      - /mnt/Storage/Downloads:/downloads:z
+    ports:
+      - "8080:8080"
+      - "6881:6881"
+      - "6881:6881/udp"
+    restart: unless-stopped
+  
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:v0.9.4
+    container_name: openwebui
+    environment:
+      - TZ=Asia/Kolkata
+      - WEBUI_ADMIN_EMAIL=${OPENWEBUI_ADMIN_EMAIL}
+      - WEBUI_ADMIN_PASSWORD=${OPENWEBUI_ADMIN_PASSWORD}
+      - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
+      - OPENAI_API_KEY=${OPENROUTER_API_KEY}
+      - ENABLE_OLLAMA_API=False
+      - RAG_EMBEDDING_ENGINE=openai
+      - RAG_OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
+      - RAG_OPENAI_API_KEY=${OPENROUTER_API_KEY}
+      - RAG_EMBEDDING_MODEL=perplexity/pplx-embed-v1-0.6b
+      - RAG_EMBEDDING_CONCURRENT_REQUESTS=2
+      - ENABLE_WEB_SEARCH=True
+      - WEB_SEARCH_ENGINE=duckduckgo
+      - DDGS_BACKEND=auto
+      - WEB_SEARCH_CONCURRENT_REQUESTS=1
+      - WEB_LOADER_CONCURRENT_REQUESTS=3
+    volumes:
+      - openwebui_data:/app/backend/data
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+
+volumes:
+  jellyfin_config:
+  jellyfin_cache:
+  postgres_data:
+  firefox_config:
+  qbittorrent_config:
+  openwebui_data:
