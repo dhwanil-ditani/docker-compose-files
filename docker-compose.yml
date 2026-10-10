@@ -1,127 +1,172 @@
 name: workspace
 
 services:
-  jellyfin:
-    image: jellyfin/jellyfin:latest
-    container_name: jellyfin
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Kolkata
-    volumes:
-      - jellyfin_config:/config
-      - jellyfin_cache:/cache
-      - /mnt/SSD/Shows:/Shows:ro
-      - /mnt/SSD/Movies:/Movies:ro
-      - /mnt/SSD/.private:/Private:ro
-    restart: unless-stopped
-    ports:
-      - "8096:8096"
-
-  tailscale:
-    image: tailscale/tailscale:latest
-    container_name: tailscale
-    network_mode: "host"
-    environment:
-      - TS_AUTHKEY=${TS_AUTHKEY}
-      - TS_STATE_DIR=/var/lib/tailscale
-    volumes:
-      - tailscale_data:/var/lib/tailscale
-      - /dev/net/tun:/dev/net/tun
-    cap_add:
-      - NET_ADMIN
-      - NET_RAW
-    restart: unless-stopped
-
   postgres:
     image: postgres:18-alpine
-    container_name: postgres
+    restart: unless-stopped
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - TZ=Asia/Kolkata
+      - TZ=${TZ}
     volumes:
       - postgres_data:/var/lib/postgresql
+      - ./postgres_initdb.d:/docker-entrypoint-initdb.d:ro
     ports:
-      - "5432:5432"
+      - 5432:5432
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U ${POSTGRES_USER}" ]
       interval: 10s
       timeout: 5s
       retries: 5
-    restart: unless-stopped
 
-  firefox:
-    image: lscr.io/linuxserver/firefox:latest
-    container_name: firefox
-    security_opt:
-      - seccomp=unconfined
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Kolkata
-    volumes:
-      - firefox_config:/config
-      - /mnt/SSD:/config/SSD
-    ports:
-      - "3001:3000"
-      - "3002:3001"
-    shm_size: "1gb"
+  mariadb:
+    image: lscr.io/linuxserver/mariadb:latest
     restart: unless-stopped
-
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
     environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Asia/Kolkata
-      - WEBUI_PORT=8080
-      - TORRENTING_PORT=6881
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - MYSQL_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
     volumes:
-      - qbittorrent_config:/config
-      - /mnt/SSD/Downloads:/downloads
+      - mariadb_data:/config
     ports:
-      - "8080:8080"
-      - "6881:6881"
-      - "6881:6881/udp"
-    restart: unless-stopped
+      - 3306:3306
   
-  openwebui:
-    image: ghcr.io/open-webui/open-webui:v0.9.4
-    container_name: openwebui
-    environment:
-      - TZ=Asia/Kolkata
-      # General WebUI Configurations
-      - WEBUI_ADMIN_EMAIL=admin@example.com
-      - WEBUI_ADMIN_PASSWORD=admin@password
-      # --- Chat Model Configuration ---
-      - OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
-      - OPENAI_API_KEY=${OPENROUTER_API_KEY}
-      - ENABLE_OLLAMA_API=False
-      # --- RAG / Document Embedding Configuration ---
-      - RAG_EMBEDDING_ENGINE=openai
-      - RAG_OPENAI_API_BASE_URL=https://openrouter.ai/api/v1
-      - RAG_OPENAI_API_KEY=${OPENROUTER_API_KEY}
-      - RAG_EMBEDDING_MODEL=perplexity/pplx-embed-v1-0.6b
-      - RAG_EMBEDDING_CONCURRENT_REQUESTS=2
-      # Web Search Configurations
-      - ENABLE_WEB_SEARCH=True
-      - WEB_SEARCH_ENGINE=duckduckgo
-      - DDGS_BACKEND=auto
-      - WEB_SEARCH_CONCURRENT_REQUESTS=1
-      - WEB_LOADER_CONCURRENT_REQUESTS=3
-    volumes:
-      - openwebui_data:/app/backend/data
-    ports:
-      - "8081:8080"
+  phpmyadmin:
+    image: lscr.io/linuxserver/phpmyadmin:latest
     restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - PMA_ARBITRARY=0
+      - PMA_HOST=mariadb
+    volumes:
+      - phpmyadmin_data:/config
+    ports:
+      - 9092:80
+
+  jellyfin:
+    image: lscr.io/linuxserver/jellyfin:latest
+    restart: unless-stopped
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+    volumes:
+      - jellyfin_config:/config
+      - /mnt/SSD/Videos:/mnt/SSD/Videos:ro
+    ports:
+      - 8096:8096
+
+  tailscale:
+    image: tailscale/tailscale:latest
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      - TS_AUTHKEY=${TS_AUTHKEY}
+      - TS_STATE_DIR=/var/lib/tailscale
+      - TS_SERVE_CONFIG=/config/serve.json
+    volumes:
+      - tailscale_data:/var/lib/tailscale
+      - /dev/net/tun:/dev/net/tun
+      - ./tailscale:/config:ro
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+
+  linkding:
+    image: sissbruecker/linkding:latest
+    restart: unless-stopped
+    volumes:
+      - linkding_data:/etc/linkding/data
+    environment:
+      - LD_SUPERUSER_NAME=${SUPERUSER_NAME}
+      - LD_SUPERUSER_PASSWORD=${SUPERUSER_PASSWORD}
+      - LD_DB_ENGINE=postgres
+      - LD_DB_DATABASE=${LINKDING_DB_NAME}
+      - LD_DB_USER=${LINKDING_DB_USER}
+      - LD_DB_PASSWORD=${LINKDING_DB_PASSWORD}
+      - LD_DB_HOST=postgres
+    ports:
+      - 9090:9090
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  transmission:
+    image: lscr.io/linuxserver/transmission:latest
+    restart: unless-stopped
+    volumes:
+      - transmission_data:/config
+      - /mnt/SSD/Downloads:/downloads
+      - /mnt/SSD/Torrents:/watch
+      - /mnt/SSD:/mnt/SSD
+    environment:
+      - PUID=${PUID}
+      - PGID=${PGID}
+      - TZ=${TZ}
+      - USER=${SUPERUSER_NAME}
+      - PASS=${SUPERUSER_PASSWORD}
+    ports:
+      - 9091:9091
+      - 51413:51413
+      - 51413:51413/udp
+
+  the-private-project-backend:
+    image: registry.gitlab.com/dhwanil-ditani/the-private-project/backend:dev
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${THE_PRIVATE_PROJECT_DB_USER}
+      - POSTGRES_PASSWORD=${THE_PRIVATE_PROJECT_DB_PASSWORD}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_DB=${THE_PRIVATE_PROJECT_DB_NAME}
+      - VIDEOS_STORAGE_PATH=/data/videos
+      - TELEGRAM_API_ID=${TELEGRAM_API_ID}
+      - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TELEGRAM_SESSION_FILE=/data/telegram/telegram_session
+      - TELEGRAM_TRANSFER_CONCURRENCY=1
+      - TELEGRAM_UPLOAD_CONCURRENCY=2
+      - TELEGRAM_DOWNLOAD_CONCURRENCY=2
+      - TMPDIR=/data/temp
+      - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH}
+      - AUTH_API_TOKEN=${AUTH_API_TOKEN}
+    volumes:
+      - /mnt/SSD/Videos/the-private-project:/data/videos
+      - telegram_data:/data/telegram
+      - /mnt/SSD/tmp/the-private-project:/data/temp
+    ports:
+      - 8000:8000
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    depends_on:
+      postgres:
+        condition: service_healthy
+  
+  the-private-project-frontend:
+    image: registry.gitlab.com/dhwanil-ditani/the-private-project/frontend:dev
+    restart: unless-stopped
+    ports:
+      - 3000:80
+    environment:
+      - BACKEND_HOST=the-private-project-backend
+      - BACKEND_PORT=8000
+    depends_on:
+      the-private-project-backend:
+        condition: service_healthy
 
 volumes:
-  jellyfin_config:
-  jellyfin_cache:
-  tailscale_data:
   postgres_data:
-  firefox_config:
-  qbittorrent_config:
+  jellyfin_config:
+  tailscale_data:
   openwebui_data:
+  linkding_data:
+  transmission_data:
+  mariadb_data:
+  phpmyadmin_data:
+  telegram_data:
