@@ -18,33 +18,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      default:
+      tpp_db:
+        ipv4_address: 172.31.250.10
 
-  mariadb:
-    image: lscr.io/linuxserver/mariadb:latest
-    restart: unless-stopped
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-      - MYSQL_ROOT_PASSWORD=${MARIADB_ROOT_PASSWORD}
-    volumes:
-      - mariadb_data:/config
-    ports:
-      - 3306:3306
-  
-  phpmyadmin:
-    image: lscr.io/linuxserver/phpmyadmin:latest
-    restart: unless-stopped
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-      - PMA_ARBITRARY=0
-      - PMA_HOST=mariadb
-    volumes:
-      - phpmyadmin_data:/config
-    ports:
-      - 9092:80
 
   jellyfin:
     image: lscr.io/linuxserver/jellyfin:latest
@@ -116,19 +94,20 @@ services:
   the-private-project-backend:
     image: registry.gitlab.com/dhwanil-ditani/the-private-project/backend:dev
     restart: unless-stopped
+    network_mode: "service:gluetun"   # every outbound connection goes through the VPN
     environment:
       - POSTGRES_USER=${THE_PRIVATE_PROJECT_DB_USER}
       - POSTGRES_PASSWORD=${THE_PRIVATE_PROJECT_DB_PASSWORD}
-      - POSTGRES_HOST=postgres
+      - POSTGRES_HOST=172.31.250.10
       - POSTGRES_DB=${THE_PRIVATE_PROJECT_DB_NAME}
       - VIDEOS_STORAGE_PATH=/data/videos
       - TELEGRAM_API_ID=${TELEGRAM_API_ID}
       - TELEGRAM_API_HASH=${TELEGRAM_API_HASH}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TELEGRAM_SESSION_FILE=/data/telegram/telegram_session
-      - TELEGRAM_TRANSFER_CONCURRENCY=1
       - TELEGRAM_UPLOAD_CONCURRENCY=2
       - TELEGRAM_DOWNLOAD_CONCURRENCY=2
+      - FETCH_CONCURRENCY=2
       - TMPDIR=/data/temp
       - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH}
       - AUTH_API_TOKEN=${AUTH_API_TOKEN}
@@ -136,8 +115,6 @@ services:
       - /mnt/SSD/Videos/the-private-project:/data/videos
       - telegram_data:/data/telegram
       - /mnt/SSD/tmp/the-private-project:/data/temp
-    ports:
-      - 8000:8000
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health', timeout=3)"]
       interval: 10s
@@ -145,6 +122,9 @@ services:
       retries: 5
       start_period: 15s
     depends_on:
+      gluetun:
+        condition: service_healthy
+        restart: true                 # compose restarts the backend when it restarts Gluetun
       postgres:
         condition: service_healthy
   
@@ -154,19 +134,49 @@ services:
     ports:
       - 3000:80
     environment:
-      - BACKEND_HOST=the-private-project-backend
+      - BACKEND_HOST=gluetun
       - BACKEND_PORT=8000
     depends_on:
       the-private-project-backend:
         condition: service_healthy
+        restart: true
+  
+  gluetun:
+    image: qmcgaw/gluetun:v3          # qdm12's official image, not a fork
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - TZ=${TZ}
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${PROTON_WIREGUARD_PRIVATE_KEY}
+      - SERVER_COUNTRIES=${PROTON_SERVER_COUNTRIES}   # e.g. Netherlands
+      # The one local network the backend may reach outside the tunnel: Postgres.
+      # Local: Postgres. Public: Telegram's data centres (core.telegram.org/resources/cidr.txt),
+      # routed outside the tunnel so archive/restore isn't bottlenecked by the VPN.
+      - FIREWALL_OUTBOUND_SUBNETS=172.31.250.0/24,91.108.4.0/22,91.108.8.0/22,91.108.12.0/22,91.108.16.0/22,91.108.20.0/22,91.108.56.0/22,91.105.192.0/23,149.154.160.0/20,185.76.151.0/24
+      # Its control server defaults to :8000, which the backend needs.
+      - HTTP_CONTROL_SERVER_ADDRESS=:8001
+      - HTTP_CONTROL_SERVER_AUTH_DEFAULT_ROLE='{"auth":"none"}'
+    ports:
+      - 8001:8001
+    networks:
+      - default
+      - tpp_db
 
 volumes:
   postgres_data:
   jellyfin_config:
   tailscale_data:
-  openwebui_data:
   linkding_data:
   transmission_data:
-  mariadb_data:
-  phpmyadmin_data:
   telegram_data:
+
+networks:
+  tpp_db:
+    ipam:
+      config:
+        - subnet: 172.31.250.0/24
