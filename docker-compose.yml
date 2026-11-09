@@ -20,7 +20,7 @@ services:
       retries: 5
     networks:
       default:
-      tpp_db:
+        tpp_db:
         ipv4_address: 172.31.250.10
 
 
@@ -33,7 +33,8 @@ services:
       - TZ=${TZ}
     volumes:
       - jellyfin_config:/config
-      - /mnt/SSD/Videos:/mnt/SSD/Videos:ro
+      - /mnt/SSD/Videos/Shows:/mnt/SSD/Videos/Shows:ro
+      - /mnt/SSD/Videos/Movies:/mnt/SSD/Videos/Movies:ro
     ports:
       - 8096:8096
 
@@ -72,24 +73,24 @@ services:
       postgres:
         condition: service_healthy
 
-  transmission:
-    image: lscr.io/linuxserver/transmission:latest
-    restart: unless-stopped
-    volumes:
-      - transmission_data:/config
-      - /mnt/SSD/Downloads:/downloads
-      - /mnt/SSD/Torrents:/watch
-      - /mnt/SSD:/mnt/SSD
-    environment:
-      - PUID=${PUID}
-      - PGID=${PGID}
-      - TZ=${TZ}
-      - USER=${SUPERUSER_NAME}
-      - PASS=${SUPERUSER_PASSWORD}
-    ports:
-      - 9091:9091
-      - 51413:51413
-      - 51413:51413/udp
+  # transmission:
+  #   image: lscr.io/linuxserver/transmission:latest
+  #   restart: unless-stopped
+  #   volumes:
+  #     - transmission_data:/config
+  #     - /mnt/SSD/Downloads:/downloads
+  #     - /mnt/SSD/Torrents:/watch
+  #     - /mnt/SSD:/mnt/SSD
+  #   environment:
+  #     - PUID=${PUID}
+  #     - PGID=${PGID}
+  #     - TZ=${TZ}
+  #     - USER=${SUPERUSER_NAME}
+  #     - PASS=${SUPERUSER_PASSWORD}
+  #   ports:
+  #     - 9091:9091
+  #     - 51413:51413
+  #     - 51413:51413/udp
 
   the-private-project-backend:
     image: registry.gitlab.com/dhwanil-ditani/the-private-project/backend:dev
@@ -166,6 +167,29 @@ services:
     networks:
       - default
       - tpp_db
+
+  gluetun-webui:
+    image: scuzza/gluetun-webui:latest
+    restart: unless-stopped
+    environment:
+      - GLUETUN_CONTROL_URL=http://gluetun:8001
+    ports:
+      - 3001:3000
+    depends_on:
+      - gluetun
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
 
 volumes:
   postgres_data:
